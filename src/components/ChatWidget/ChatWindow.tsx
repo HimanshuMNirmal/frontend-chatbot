@@ -21,65 +21,75 @@ function ChatWindow({ onClose }: ChatWindowProps) {
     const [handedOffToAdmin, setHandedOffToAdmin] = useState(false);
     const isCreatingSession = useRef(false);
 
+    const currentSessionIdRef = useRef(currentSessionId);
+
     useEffect(() => {
-        // Only connect socket and listen for messages
-        // Session creation is deferred until first message is sent
-        const initializeChat = async () => {
-            const socket = socketService.connect();
+        currentSessionIdRef.current = currentSessionId;
+    }, [currentSessionId]);
 
-            socket.on('connect', () => {
-                setIsConnected(true);
-            });
+    useEffect(() => {
+        // Connect socket and setup listeners
+        const socket = socketService.connect();
 
-            socket.on('disconnect', () => {
-                setIsConnected(false);
-            });
+        socket.on('connect', () => {
+            setIsConnected(true);
+        });
 
-            socket.on('connect_error', () => {
-                setIsConnected(false);
-            });
+        socket.on('disconnect', () => {
+            setIsConnected(false);
+        });
 
-            // Listen for admin replies in real-time
-            socketService.on('admin-reply', (message) => {
-                dispatch(addMessage(message));
-                setIsAdminTyping(false); // Stop typing indicator when message arrives
-                setHandedOffToAdmin(true); // Mark as handed off when admin replies
-            });
+        socket.on('connect_error', () => {
+            setIsConnected(false);
+        });
 
-            // Listen for AI replies in real-time
-            socketService.on('ai-reply', (message) => {
-                dispatch(addMessage(message));
-                setIsAiThinking(false); // Stop thinking indicator when AI message arrives
-                // Check if this is a handoff message
-                if (message.message.includes('Connecting you to our support team')) {
-                    setHandedOffToAdmin(true);
-                }
-            });
+        // Listen for admin replies in real-time
+        socketService.on('admin-reply', (message) => {
+            dispatch(addMessage(message));
+            setIsAdminTyping(false);
+            setHandedOffToAdmin(true);
+        });
 
-            // Listen for admin typing indicator
-            socketService.on('admin-typing', (data: { sessionId: string; isTyping: boolean }) => {
-                if (data.sessionId === currentSessionId) {
-                    setIsAdminTyping(data.isTyping);
-                }
-            });
+        // Listen for AI replies in real-time
+        socketService.on('ai-reply', (message) => {
+            dispatch(addMessage(message));
+            setIsAiThinking(false);
+            if (message.message.includes('Connecting you to our support team')) {
+                setHandedOffToAdmin(true);
+            }
+        });
 
-            // Listen for AI thinking indicator
-            socketService.on('ai-thinking', (data: { sessionId: string; isThinking: boolean }) => {
-                if (data.sessionId === currentSessionId) {
-                    setIsAiThinking(data.isThinking);
-                }
-            });
+        // Listen for admin typing indicator
+        socketService.on('admin-typing', (data: { sessionId: string; isTyping: boolean }) => {
+            if (data.sessionId === currentSessionIdRef.current) {
+                setIsAdminTyping(data.isTyping);
+            }
+        });
 
-            // If session already exists, load messages and join room
+        // Listen for AI thinking indicator
+        socketService.on('ai-thinking', (data: { sessionId: string; isThinking: boolean }) => {
+            if (data.sessionId === currentSessionIdRef.current) {
+                setIsAiThinking(data.isThinking);
+            }
+        });
+
+        return () => {
+            socketService.disconnect();
+        };
+    }, [dispatch]);
+
+    useEffect(() => {
+        const initializeSession = async () => {
             if (currentSessionId) {
-                socket.emit('user-connected', {
-                    sessionId: currentSessionId,
-                    ipAddress: '127.0.0.1',
-                });
+                const socket = socketService.getSocket();
+                if (socket) {
+                    socket.emit('user-connected', {
+                        sessionId: currentSessionId,
+                        ipAddress: '127.0.0.1',
+                    });
+                }
 
-                // Only load messages if we didn't just create the session locally
                 if (!isCreatingSession.current) {
-                    // Load existing messages from API
                     const response = await apiService.get(`/api/messages/${currentSessionId}`);
                     const existingMessages = Array.isArray(response) ? response : [];
 
@@ -89,7 +99,6 @@ function ChatWindow({ onClose }: ChatWindowProps) {
 
                     dispatch(setMessages(existingMessages));
 
-                    // Check if any admin messages exist (means already handed off)
                     const hasAdminMessage = existingMessages.some((msg: any) => msg.senderType === 'admin');
                     if (hasAdminMessage) {
                         setHandedOffToAdmin(true);
@@ -100,11 +109,7 @@ function ChatWindow({ onClose }: ChatWindowProps) {
             }
         };
 
-        initializeChat();
-
-        return () => {
-            socketService.disconnect();
-        };
+        initializeSession();
     }, [currentSessionId, dispatch]);
 
     const handleSendMessage = async (message: string) => {
@@ -114,12 +119,6 @@ function ChatWindow({ onClose }: ChatWindowProps) {
             try {
                 isCreatingSession.current = true;
                 sessionId = generateSessionId();
-
-                // Create session in database
-                await apiService.post('/api/chats', {
-                    sessionId,
-                    ipAddress: '127.0.0.1',
-                });
 
                 dispatch(setSessionId(sessionId));
 
@@ -139,14 +138,7 @@ function ChatWindow({ onClose }: ChatWindowProps) {
             }
         }
 
-        const messageData = {
-            sessionId,
-            message,
-            timestamp: new Date().toISOString(),
-        };
-
-        socketService.emit('user-message', messageData);
-
+        // Optimistic UI update
         dispatch(addMessage({
             id: Date.now().toString(),
             sessionId,
@@ -155,6 +147,14 @@ function ChatWindow({ onClose }: ChatWindowProps) {
             timestamp: new Date().toISOString(),
             isRead: false,
         }));
+
+        const messageData = {
+            sessionId,
+            message,
+            timestamp: new Date().toISOString(),
+        };
+
+        socketService.emit('user-message', messageData);
     };
 
     const handleTyping = (isTyping: boolean) => {
