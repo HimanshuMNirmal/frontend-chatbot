@@ -16,6 +16,7 @@ function ChatWindow({ onClose }: ChatWindowProps) {
     const dispatch = useDispatch();
     const { currentSessionId, messages } = useSelector((state: RootState) => state.chat);
     const [isConnected, setIsConnected] = useState(false);
+    const [isAdminTyping, setIsAdminTyping] = useState(false);
 
     useEffect(() => {
         // Only connect socket and listen for messages
@@ -27,6 +28,14 @@ function ChatWindow({ onClose }: ChatWindowProps) {
             // Listen for admin replies in real-time
             socketService.on('admin-reply', (message) => {
                 dispatch(addMessage(message));
+                setIsAdminTyping(false); // Stop typing indicator when message arrives
+            });
+
+            // Listen for admin typing indicator
+            socketService.on('admin-typing', (data: { sessionId: string; isTyping: boolean }) => {
+                if (data.sessionId === currentSessionId) {
+                    setIsAdminTyping(data.isTyping);
+                }
             });
 
             // If session already exists, load messages and join room
@@ -91,6 +100,15 @@ function ChatWindow({ onClose }: ChatWindowProps) {
         }));
     };
 
+    const handleTyping = (isTyping: boolean) => {
+        if (currentSessionId) {
+            socketService.emit('user-typing', {
+                sessionId: currentSessionId,
+                isTyping,
+            });
+        }
+    };
+
     return (
         <div className="fixed bottom-24 right-6 w-96 h-[500px] bg-white rounded-lg shadow-2xl flex flex-col z-40">
             <div className="bg-blue-600 text-white p-4 rounded-t-lg flex justify-between items-center">
@@ -102,8 +120,13 @@ function ChatWindow({ onClose }: ChatWindowProps) {
                 </button>
             </div>
 
-            <MessageList messages={messages} />
-            <MessageInput onSend={handleSendMessage} disabled={!isConnected} />
+            <MessageList messages={messages} isAdminTyping={isAdminTyping} />
+            <MessageInput
+                onSend={handleSendMessage}
+                disabled={!isConnected}
+                sessionId={currentSessionId || undefined}
+                onTyping={handleTyping}
+            />
         </div>
     );
 }

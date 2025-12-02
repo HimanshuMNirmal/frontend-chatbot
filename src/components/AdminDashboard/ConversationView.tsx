@@ -18,7 +18,9 @@ interface ConversationViewProps {
 function ConversationView({ sessionId }: ConversationViewProps) {
     const [messages, setMessages] = useState<Message[]>([]);
     const [newMessage, setNewMessage] = useState('');
+    const [isUserTyping, setIsUserTyping] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const typingTimeoutRef = useRef<number | null>(null);
 
     useEffect(() => {
         loadMessages();
@@ -27,17 +29,26 @@ function ConversationView({ sessionId }: ConversationViewProps) {
         socketService.on('user-message', (message: Message) => {
             if (message.sessionId === sessionId) {
                 setMessages((prev) => [...prev, message]);
+                setIsUserTyping(false); // Stop typing indicator when message arrives
+            }
+        });
+
+        // Listen for user typing indicator
+        socketService.on('user-typing', (data: { sessionId: string; isTyping: boolean }) => {
+            if (data.sessionId === sessionId) {
+                setIsUserTyping(data.isTyping);
             }
         });
 
         return () => {
             socketService.off('user-message');
+            socketService.off('user-typing');
         };
     }, [sessionId]);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages]);
+    }, [messages, isUserTyping]);
 
     const loadMessages = async () => {
         try {
@@ -59,6 +70,12 @@ function ConversationView({ sessionId }: ConversationViewProps) {
         };
 
         socketService.emit('admin-reply', messageData);
+
+        // Stop typing indicator
+        socketService.emit('admin-typing', {
+            sessionId,
+            isTyping: false,
+        });
 
         setMessages((prev) => [
             ...prev,
@@ -90,10 +107,10 @@ function ConversationView({ sessionId }: ConversationViewProps) {
                     >
                         <div
                             className={`max-w-[70%] rounded-lg p-3 ${msg.senderType === 'user'
-                                    ? 'bg-gray-200 text-gray-800'
-                                    : msg.senderType === 'ai'
-                                        ? 'bg-green-100 text-gray-800'
-                                        : 'bg-blue-600 text-white'
+                                ? 'bg-gray-200 text-gray-800'
+                                : msg.senderType === 'ai'
+                                    ? 'bg-green-100 text-gray-800'
+                                    : 'bg-blue-600 text-white'
                                 }`}
                         >
                             <p className="text-sm">{msg.message}</p>
@@ -110,6 +127,22 @@ function ConversationView({ sessionId }: ConversationViewProps) {
                         </div>
                     </div>
                 ))}
+
+                {isUserTyping && (
+                    <div className="flex justify-start">
+                        <div className="bg-gray-200 text-gray-800 rounded-lg p-3">
+                            <div className="flex items-center gap-1">
+                                <span className="text-sm text-gray-600">User is typing</span>
+                                <div className="flex gap-1 ml-1">
+                                    <span className="w-1.5 h-1.5 bg-gray-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                                    <span className="w-1.5 h-1.5 bg-gray-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                                    <span className="w-1.5 h-1.5 bg-gray-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 <div ref={messagesEndRef} />
             </div>
 
@@ -118,7 +151,36 @@ function ConversationView({ sessionId }: ConversationViewProps) {
                     <input
                         type="text"
                         value={newMessage}
-                        onChange={(e) => setNewMessage(e.target.value)}
+                        onChange={(e) => {
+                            const value = e.target.value;
+                            setNewMessage(value);
+
+                            // Emit typing indicator
+                            if (value.length > 0) {
+                                socketService.emit('admin-typing', {
+                                    sessionId,
+                                    isTyping: true,
+                                });
+
+                                // Clear existing timeout
+                                if (typingTimeoutRef.current) {
+                                    clearTimeout(typingTimeoutRef.current);
+                                }
+
+                                // Set timeout to stop typing indicator after 2 seconds
+                                typingTimeoutRef.current = setTimeout(() => {
+                                    socketService.emit('admin-typing', {
+                                        sessionId,
+                                        isTyping: false,
+                                    });
+                                }, 2000);
+                            } else {
+                                socketService.emit('admin-typing', {
+                                    sessionId,
+                                    isTyping: false,
+                                });
+                            }
+                        }}
                         placeholder="Type your reply..."
                         className="flex-1 border rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-600"
                     />
