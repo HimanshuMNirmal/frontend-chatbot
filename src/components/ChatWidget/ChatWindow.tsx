@@ -26,7 +26,18 @@ function ChatWindow({ onClose }: ChatWindowProps) {
         // Session creation is deferred until first message is sent
         const initializeChat = async () => {
             const socket = socketService.connect();
-            setIsConnected(true);
+
+            socket.on('connect', () => {
+                setIsConnected(true);
+            });
+
+            socket.on('disconnect', () => {
+                setIsConnected(false);
+            });
+
+            socket.on('connect_error', () => {
+                setIsConnected(false);
+            });
 
             // Listen for admin replies in real-time
             socketService.on('admin-reply', (message) => {
@@ -98,26 +109,34 @@ function ChatWindow({ onClose }: ChatWindowProps) {
 
     const handleSendMessage = async (message: string) => {
         let sessionId = currentSessionId;
-
+        debugger
         // Create session on first message
         if (!sessionId) {
-            isCreatingSession.current = true;
-            sessionId = generateSessionId();
-            dispatch(setSessionId(sessionId));
+            try {
+                isCreatingSession.current = true;
+                sessionId = generateSessionId();
 
-            // Create session in database
-            await apiService.post('/api/chats', {
-                sessionId,
-                ipAddress: '127.0.0.1',
-            });
-
-            // Emit user-connected event to join room
-            const socket = socketService.getSocket();
-            if (socket) {
-                socket.emit('user-connected', {
+                // Create session in database
+                await apiService.post('/api/chats', {
                     sessionId,
                     ipAddress: '127.0.0.1',
                 });
+
+                dispatch(setSessionId(sessionId));
+
+                // Emit user-connected event to join room
+                const socket = socketService.getSocket();
+                if (socket) {
+                    socket.emit('user-connected', {
+                        sessionId,
+                        ipAddress: '127.0.0.1',
+                    });
+                }
+            } catch (error) {
+                console.error('Failed to create session:', error);
+                isCreatingSession.current = false;
+                // Don't proceed with sending message if session creation failed
+                return;
             }
         }
 
@@ -158,6 +177,7 @@ function ChatWindow({ onClose }: ChatWindowProps) {
                             onClick={() => handleSendMessage('I would like to talk to a human agent')}
                             className="bg-blue-700 hover:bg-blue-800 px-3 py-1 rounded text-sm transition-colors"
                             title="Request human support"
+                            disabled={!isConnected}
                         >
                             👤 Human
                         </button>
@@ -169,6 +189,12 @@ function ChatWindow({ onClose }: ChatWindowProps) {
                     </button>
                 </div>
             </div>
+
+            {!isConnected && (
+                <div className="bg-red-500 text-white text-xs p-1 text-center font-medium">
+                    Connection lost. Reconnecting...
+                </div>
+            )}
 
             <MessageList messages={messages} isAdminTyping={isAdminTyping} isAiThinking={isAiThinking} />
             <MessageInput
