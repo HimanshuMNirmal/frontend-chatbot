@@ -28,7 +28,12 @@ function ChatList({ onSelectChat, selectedSessionId }: ChatListProps) {
     const loadSessions = async () => {
         try {
             const data = await apiService.get('/api/chats');
-            setSessions(data);
+            if (Array.isArray(data)) {
+                setSessions(data);
+            } else {
+                console.error('Expected array of sessions but got:', data);
+                setSessions([]);
+            }
         } catch (error) {
             console.error('Failed to load sessions:', error);
             navigate('/admin');

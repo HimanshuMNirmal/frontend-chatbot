@@ -66,7 +66,13 @@ function ChatWindow({ onClose }: ChatWindowProps) {
                 });
 
                 // Load existing messages from API
-                const existingMessages = await apiService.get(`/api/messages/${currentSessionId}`);
+                const response = await apiService.get(`/api/messages/${currentSessionId}`);
+                const existingMessages = Array.isArray(response) ? response : [];
+
+                if (!Array.isArray(response)) {
+                    console.error('Expected array of messages but got:', response);
+                }
+
                 dispatch(setMessages(existingMessages));
 
                 // Check if any admin messages exist (means already handed off)
