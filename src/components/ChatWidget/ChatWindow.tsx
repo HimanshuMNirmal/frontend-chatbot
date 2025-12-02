@@ -18,36 +18,28 @@ function ChatWindow({ onClose }: ChatWindowProps) {
     const [isConnected, setIsConnected] = useState(false);
 
     useEffect(() => {
-        // Initialize session and socket connection
+        // Only connect socket and listen for messages
+        // Session creation is deferred until first message is sent
         const initializeChat = async () => {
-            let sessionId = currentSessionId;
-
-            if (!sessionId) {
-                sessionId = generateSessionId();
-                dispatch(setSessionId(sessionId));
-
-                await apiService.post('/api/chats', {
-                    sessionId,
-                    ipAddress: '127.0.0.1',
-                });
-            }
-
             const socket = socketService.connect();
             setIsConnected(true);
-
-            socket.emit('user-connected', {
-                sessionId,
-                ipAddress: '127.0.0.1',
-            });
-
-            // Load existing messages from API
-            const existingMessages = await apiService.get(`/api/messages/${sessionId}`);
-            dispatch(setMessages(existingMessages));
 
             // Listen for admin replies in real-time
             socketService.on('admin-reply', (message) => {
                 dispatch(addMessage(message));
             });
+
+            // If session already exists, load messages and join room
+            if (currentSessionId) {
+                socket.emit('user-connected', {
+                    sessionId: currentSessionId,
+                    ipAddress: '127.0.0.1',
+                });
+
+                // Load existing messages from API
+                const existingMessages = await apiService.get(`/api/messages/${currentSessionId}`);
+                dispatch(setMessages(existingMessages));
+            }
         };
 
         initializeChat();
@@ -57,11 +49,32 @@ function ChatWindow({ onClose }: ChatWindowProps) {
         };
     }, [currentSessionId, dispatch]);
 
-    const handleSendMessage = (message: string) => {
-        if (!currentSessionId) return;
+    const handleSendMessage = async (message: string) => {
+        let sessionId = currentSessionId;
+
+        // Create session on first message
+        if (!sessionId) {
+            sessionId = generateSessionId();
+            dispatch(setSessionId(sessionId));
+
+            // Create session in database
+            await apiService.post('/api/chats', {
+                sessionId,
+                ipAddress: '127.0.0.1',
+            });
+
+            // Emit user-connected event to join room
+            const socket = socketService.getSocket();
+            if (socket) {
+                socket.emit('user-connected', {
+                    sessionId,
+                    ipAddress: '127.0.0.1',
+                });
+            }
+        }
 
         const messageData = {
-            sessionId: currentSessionId,
+            sessionId,
             message,
             timestamp: new Date().toISOString(),
         };
@@ -70,7 +83,7 @@ function ChatWindow({ onClose }: ChatWindowProps) {
 
         dispatch(addMessage({
             id: Date.now().toString(),
-            sessionId: currentSessionId,
+            sessionId,
             message,
             senderType: 'user',
             timestamp: new Date().toISOString(),
