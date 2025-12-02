@@ -31,16 +31,21 @@ function MessageList({ messages, isAdminTyping, isAiThinking }: MessageListProps
                 >
                     <div
                         className={`max-w-[70%] rounded-lg p-3 ${msg.senderType === 'user'
-                                ? 'bg-blue-600 text-white'
-                                : msg.senderType === 'ai'
-                                    ? 'bg-green-100 text-gray-800 border border-green-300'
-                                    : 'bg-gray-200 text-gray-800'
+                            ? 'bg-blue-600 text-white'
+                            : msg.senderType === 'ai'
+                                ? 'bg-green-100 text-gray-800 border border-green-300'
+                                : 'bg-purple-100 text-gray-800 border border-purple-300'
                             }`}
                     >
                         <div className="flex items-center gap-2 mb-1">
                             {msg.senderType === 'ai' && (
                                 <span className="text-xs bg-green-600 text-white px-2 py-0.5 rounded font-semibold">
                                     AI
+                                </span>
+                            )}
+                            {msg.senderType === 'admin' && (
+                                <span className="text-xs bg-purple-600 text-white px-2 py-0.5 rounded font-semibold">
+                                    Admin
                                 </span>
                             )}
                         </div>
