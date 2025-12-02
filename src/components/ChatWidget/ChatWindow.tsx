@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import MessageList from './MessageList';
 import MessageInput from './MessageInput';
@@ -19,6 +19,7 @@ function ChatWindow({ onClose }: ChatWindowProps) {
     const [isAdminTyping, setIsAdminTyping] = useState(false);
     const [isAiThinking, setIsAiThinking] = useState(false);
     const [handedOffToAdmin, setHandedOffToAdmin] = useState(false);
+    const isCreatingSession = useRef(false);
 
     useEffect(() => {
         // Only connect socket and listen for messages
@@ -65,20 +66,25 @@ function ChatWindow({ onClose }: ChatWindowProps) {
                     ipAddress: '127.0.0.1',
                 });
 
-                // Load existing messages from API
-                const response = await apiService.get(`/api/messages/${currentSessionId}`);
-                const existingMessages = Array.isArray(response) ? response : [];
+                // Only load messages if we didn't just create the session locally
+                if (!isCreatingSession.current) {
+                    // Load existing messages from API
+                    const response = await apiService.get(`/api/messages/${currentSessionId}`);
+                    const existingMessages = Array.isArray(response) ? response : [];
 
-                if (!Array.isArray(response)) {
-                    console.error('Expected array of messages but got:', response);
-                }
+                    if (!Array.isArray(response)) {
+                        console.error('Expected array of messages but got:', response);
+                    }
 
-                dispatch(setMessages(existingMessages));
+                    dispatch(setMessages(existingMessages));
 
-                // Check if any admin messages exist (means already handed off)
-                const hasAdminMessage = existingMessages.some((msg: any) => msg.senderType === 'admin');
-                if (hasAdminMessage) {
-                    setHandedOffToAdmin(true);
+                    // Check if any admin messages exist (means already handed off)
+                    const hasAdminMessage = existingMessages.some((msg: any) => msg.senderType === 'admin');
+                    if (hasAdminMessage) {
+                        setHandedOffToAdmin(true);
+                    }
+                } else {
+                    isCreatingSession.current = false;
                 }
             }
         };
@@ -95,6 +101,7 @@ function ChatWindow({ onClose }: ChatWindowProps) {
 
         // Create session on first message
         if (!sessionId) {
+            isCreatingSession.current = true;
             sessionId = generateSessionId();
             dispatch(setSessionId(sessionId));
 
