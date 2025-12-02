@@ -109,7 +109,6 @@ function ChatWindow({ onClose }: ChatWindowProps) {
 
     const handleSendMessage = async (message: string) => {
         let sessionId = currentSessionId;
-        debugger
         // Create session on first message
         if (!sessionId) {
             try {
