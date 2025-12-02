@@ -18,6 +18,7 @@ function ChatWindow({ onClose }: ChatWindowProps) {
     const [isConnected, setIsConnected] = useState(false);
     const [isAdminTyping, setIsAdminTyping] = useState(false);
     const [isAiThinking, setIsAiThinking] = useState(false);
+    const [handedOffToAdmin, setHandedOffToAdmin] = useState(false);
 
     useEffect(() => {
         // Only connect socket and listen for messages
@@ -30,12 +31,17 @@ function ChatWindow({ onClose }: ChatWindowProps) {
             socketService.on('admin-reply', (message) => {
                 dispatch(addMessage(message));
                 setIsAdminTyping(false); // Stop typing indicator when message arrives
+                setHandedOffToAdmin(true); // Mark as handed off when admin replies
             });
 
             // Listen for AI replies in real-time
             socketService.on('ai-reply', (message) => {
                 dispatch(addMessage(message));
                 setIsAiThinking(false); // Stop thinking indicator when AI message arrives
+                // Check if this is a handoff message
+                if (message.message.includes('Connecting you to our support team')) {
+                    setHandedOffToAdmin(true);
+                }
             });
 
             // Listen for admin typing indicator
@@ -62,6 +68,12 @@ function ChatWindow({ onClose }: ChatWindowProps) {
                 // Load existing messages from API
                 const existingMessages = await apiService.get(`/api/messages/${currentSessionId}`);
                 dispatch(setMessages(existingMessages));
+
+                // Check if any admin messages exist (means already handed off)
+                const hasAdminMessage = existingMessages.some((msg: any) => msg.senderType === 'admin');
+                if (hasAdminMessage) {
+                    setHandedOffToAdmin(true);
+                }
             }
         };
 
@@ -127,11 +139,22 @@ function ChatWindow({ onClose }: ChatWindowProps) {
         <div className="fixed bottom-24 right-6 w-96 h-[500px] bg-white rounded-lg shadow-2xl flex flex-col z-40">
             <div className="bg-blue-600 text-white p-4 rounded-t-lg flex justify-between items-center">
                 <h3 className="font-semibold">Chat Support</h3>
-                <button onClick={onClose} className="hover:bg-blue-700 rounded p-1">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                </button>
+                <div className="flex items-center gap-2">
+                    {!handedOffToAdmin && (
+                        <button
+                            onClick={() => handleSendMessage('I would like to talk to a human agent')}
+                            className="bg-blue-700 hover:bg-blue-800 px-3 py-1 rounded text-sm transition-colors"
+                            title="Request human support"
+                        >
+                            👤 Human
+                        </button>
+                    )}
+                    <button onClick={onClose} className="hover:bg-blue-700 rounded p-1">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
             </div>
 
             <MessageList messages={messages} isAdminTyping={isAdminTyping} isAiThinking={isAiThinking} />
