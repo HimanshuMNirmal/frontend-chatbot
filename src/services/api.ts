@@ -26,6 +26,15 @@ class ApiService {
         return response.json();
     }
 
+    async put(endpoint: string, data: any) {
+        const response = await fetch(`${API_URL}${endpoint}`, {
+            method: 'PUT',
+            headers: this.getHeaders(),
+            body: JSON.stringify(data),
+        });
+        return response.json();
+    }
+
     async patch(endpoint: string, data: any) {
         const response = await fetch(`${API_URL}${endpoint}`, {
             method: 'PATCH',

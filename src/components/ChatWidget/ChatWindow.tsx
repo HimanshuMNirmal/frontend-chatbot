@@ -17,6 +17,7 @@ function ChatWindow({ onClose }: ChatWindowProps) {
     const { currentSessionId, messages } = useSelector((state: RootState) => state.chat);
     const [isConnected, setIsConnected] = useState(false);
     const [isAdminTyping, setIsAdminTyping] = useState(false);
+    const [isAiThinking, setIsAiThinking] = useState(false);
 
     useEffect(() => {
         // Only connect socket and listen for messages
@@ -31,10 +32,23 @@ function ChatWindow({ onClose }: ChatWindowProps) {
                 setIsAdminTyping(false); // Stop typing indicator when message arrives
             });
 
+            // Listen for AI replies in real-time
+            socketService.on('ai-reply', (message) => {
+                dispatch(addMessage(message));
+                setIsAiThinking(false); // Stop thinking indicator when AI message arrives
+            });
+
             // Listen for admin typing indicator
             socketService.on('admin-typing', (data: { sessionId: string; isTyping: boolean }) => {
                 if (data.sessionId === currentSessionId) {
                     setIsAdminTyping(data.isTyping);
+                }
+            });
+
+            // Listen for AI thinking indicator
+            socketService.on('ai-thinking', (data: { sessionId: string; isThinking: boolean }) => {
+                if (data.sessionId === currentSessionId) {
+                    setIsAiThinking(data.isThinking);
                 }
             });
 
@@ -120,7 +134,7 @@ function ChatWindow({ onClose }: ChatWindowProps) {
                 </button>
             </div>
 
-            <MessageList messages={messages} isAdminTyping={isAdminTyping} />
+            <MessageList messages={messages} isAdminTyping={isAdminTyping} isAiThinking={isAiThinking} />
             <MessageInput
                 onSend={handleSendMessage}
                 disabled={!isConnected}

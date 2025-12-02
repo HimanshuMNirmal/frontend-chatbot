@@ -2,9 +2,11 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ChatList from './ChatList';
 import ConversationView from './ConversationView';
+import AISettings from './AISettings';
 
 function Dashboard() {
     const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+    const [activeTab, setActiveTab] = useState<'chats' | 'ai-settings'>('chats');
     const navigate = useNavigate();
 
     const handleLogout = () => {
@@ -24,17 +26,52 @@ function Dashboard() {
                 </button>
             </div>
 
-            <div className="flex-1 flex overflow-hidden">
-                <ChatList
-                    onSelectChat={setSelectedSessionId}
-                    selectedSessionId={selectedSessionId}
-                />
+            {/* Tab Navigation */}
+            <div className="bg-white border-b border-gray-200">
+                <div className="flex">
+                    <button
+                        onClick={() => setActiveTab('chats')}
+                        className={`px-6 py-3 font-medium transition-colors ${activeTab === 'chats'
+                                ? 'text-blue-600 border-b-2 border-blue-600'
+                                : 'text-gray-600 hover:text-gray-800'
+                            }`}
+                    >
+                        💬 Chats
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('ai-settings')}
+                        className={`px-6 py-3 font-medium transition-colors ${activeTab === 'ai-settings'
+                                ? 'text-blue-600 border-b-2 border-blue-600'
+                                : 'text-gray-600 hover:text-gray-800'
+                            }`}
+                    >
+                        🤖 AI Settings
+                    </button>
+                </div>
+            </div>
 
-                {selectedSessionId ? (
-                    <ConversationView sessionId={selectedSessionId} />
+            {/* Content Area */}
+            <div className="flex-1 overflow-hidden">
+                {activeTab === 'chats' ? (
+                    <div className="flex h-full">
+                        <ChatList
+                            onSelectChat={setSelectedSessionId}
+                            selectedSessionId={selectedSessionId}
+                        />
+
+                        {selectedSessionId ? (
+                            <ConversationView sessionId={selectedSessionId} />
+                        ) : (
+                            <div className="flex-1 flex items-center justify-center bg-gray-50">
+                                <p className="text-gray-500">Select a chat to view conversation</p>
+                            </div>
+                        )}
+                    </div>
                 ) : (
-                    <div className="flex-1 flex items-center justify-center bg-gray-50">
-                        <p className="text-gray-500">Select a chat to view conversation</p>
+                    <div className="h-full overflow-y-auto bg-gray-50 p-6">
+                        <div className="max-w-3xl mx-auto">
+                            <AISettings />
+                        </div>
                     </div>
                 )}
             </div>
